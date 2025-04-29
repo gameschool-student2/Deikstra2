@@ -7,6 +7,11 @@
 #include "math.h"
 #include <cstdlib>
 #include <limits>
+#include <iostream>
+#include <cstdlib> 
+#include <ctime>   
+#include <string>  
+HFONT hFont;
 
 struct {
     HWND hWnd;//хэндл окна
@@ -19,23 +24,36 @@ HPEN penWhite;
 HPEN penBlue;
 HBRUSH brush;
 
+int getRandomStringNumber() {
+    // Генерация случайного числа от 1 до 20
+    int randomNumber = (std::rand() % 20) + 1; // `rand()` возвращает числа от 0 до 19, добавляем 1
+    return randomNumber; // Преобразуем число в строку и возвращаем
+}
+
 struct point
 {
     float x;
     float y;
-    //int l = 0;
 };
 struct edge
 {
     int i1;
     int i2;
-    //int length;
+    int length = 0;
 };
 std::vector<edge> edgelist;
 std::vector<point> pointlist;
 
 float mouseX;
 float mouseY;
+
+void DrawTextGDI(float x, float y, const char* str)
+{
+    SetTextColor(window.context, RGB(255, 255, 255));
+    SetBkColor(window.context, RGB(0, 0, 0));
+    SetBkMode(window.context, TRANSPARENT);
+    TextOutA(window.context, x * window.width, y * window.height, str, strlen(str));
+}
 
 void getMouse()
 {
@@ -65,12 +83,71 @@ void drawPoint(float x, float y, float sz)
     );
 
 }
+void drawRectangle(float x1, float y1, float x2, float y2)
+{
+
+    Rectangle(window.context, x1 * window.width, y1 * window.height, x2 * window.width, y2 * window.height);
+}
 
 void Line(float x, float y, float x1, float y1)
 {
     MoveToEx(window.context, x * window.width, y * window.height, NULL);
     LineTo(window.context, x1 * window.width, y1 * window.height);
 }
+
+const int INF = 999999999999999; 
+
+// Рекурсивная функция для алгоритма Дейкстры
+void dijkstraUtil(int u, std::vector<int>& dist, const std::vector<edge>& edgelist, std::vector<bool>& visited) {
+    visited[u] = true; // Помечаем узел как посещенный
+
+    // Обходим все рёбра
+    for (const auto& edge : edgelist) {
+        int v = -1;
+        if (edge.i1 == u) {
+            v = edge.i2; // Соединение с ребром
+        }
+        else if (edge.i2 == u) {
+            v = edge.i1; // Соединение с ребром
+        }
+
+        // Если найден более короткий путь
+        if (v != -1 && !visited[v]) {
+            if (dist[u] + edge.length < dist[v]) {
+                dist[v] = dist[u] + edge.length; // Обновляем расстояние
+            }
+        }
+    }
+
+    // Ищем следующий узел с минимальным расстоянием
+    int nextNode = -1;
+    int minDist = INF; // Используем постоянное значение INF
+
+    for (int i = 0; i < dist.size(); ++i) {
+        if (!visited[i] && dist[i] < minDist) {
+            minDist = dist[i];
+            nextNode = i;
+        }
+    }
+
+    // Запускаем рекурсию для следующего узла
+    if (nextNode != -1) {
+        dijkstraUtil(nextNode, dist, edgelist, visited);
+    }
+}
+
+// Основная функция Дейкстры
+void dijkstra(int start, std::vector<point>& pointlist, std::vector<edge>& edgelist) {
+    int n = pointlist.size();
+    std::vector<int> dist(n, INF); // Массив для расстояний
+    std::vector<bool> visited(n, false); // Массив посещенных вершин
+    dist[start] = 0; // Расстояние до стартовой вершины
+
+    // Рекурсивный вызов
+    dijkstraUtil(start, dist, edgelist, visited);
+    
+}
+
 
 #define MAX_LOADSTRING 100
 
@@ -118,6 +195,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     window.context = CreateCompatibleDC(window.device_context);//второй буфер
     SelectObject(window.context, CreateCompatibleBitmap(window.device_context, window.width, window.height));//привязываем окно к контексту
     GetClientRect(window.hWnd, &r);
+    //поиграем шрифтами и цветами
+    
+    hFont = CreateFont(20, 0, 0, 0, FW_BOLD, 0, 0, 0, 0, 0, 0, 2, 0, "CALIBRI");
+    auto hTmp = (HFONT)SelectObject(window.context, hFont);
 
     penRed = CreatePen(PS_SOLID, 3, RGB(255, 0, 0));
     penWhite = CreatePen(PS_SOLID, 3, RGB(255, 255, 255));
@@ -208,23 +289,39 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
         SelectObject(window.context, penWhite);
         SelectObject(window.context, brush);
-
-        for (int i = 0; i < pointlist.size(); i++)
-        {
-            //TextOutA(window.context, pointlist[i].x+10 * window.width, pointlist[i].y-15 * window.height, "A", 14);
-            drawPoint(pointlist[i].x, pointlist[i].y, pointsize);
-        }
-
-                 
-        SelectObject(window.context, penRed);
+        
+        drawRectangle(0.05, 0.05, 0.10, 0.1);
+        DrawTextGDI(0.060, 0.06, "set edges");
+        drawRectangle(0.150, 0.05, 0.210, 0.1);
+        DrawTextGDI(0.160, 0.06, "set points");
+        
         for (int i = 0; i < edgelist.size(); i++)
         {
             int i1 = edgelist[i].i1;
             int i2 = edgelist[i].i2;
-
+            if (edgelist[i].length == 0)
+            {
+                edgelist[i].length = getRandomStringNumber();
+            }
+            float x = (pointlist[i2].x + pointlist[i1].x) / 2;
+            float y = (pointlist[i2].y + pointlist[i1].y) / 2;
+            std::string t = std::to_string(edgelist[i].length);
+            DrawTextGDI(x+0.01, y + 0.02, t.c_str());
             Line(pointlist[i1].x, pointlist[i1].y, pointlist[i2].x, pointlist[i2].y);
         }
+
+        for (int i = 0; i < pointlist.size(); i++)
+        {
+            drawPoint(pointlist[i].x, pointlist[i].y, pointsize);
+            std::string x = std::to_string(i+1);
+            DrawTextGDI(pointlist[i].x-0.002, pointlist[i].y - 0.01, x.c_str());
+        }
+        dijkstra(0, pointlist, edgelist);
+        SelectObject(window.context, penRed);
+        
+
                  
+             
 
         BitBlt(window.device_context, 0, 0, window.width, window.height, window.context, 0, 0, SRCCOPY);//копируем буфер в окно
         Sleep(16);//ждем 16 милисекунд (1/количество кадров в секунду)
@@ -276,15 +373,15 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
    hInst = hInstance; // Store instance handle in our global variable
 
-   window.hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-      CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
+   window.hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW | WS_MAXIMIZE,
+      0, 0, 0, 0, nullptr, nullptr, hInstance, nullptr);
 
    if (!window.hWnd)
    {
       return FALSE;
    }
 
-   ShowWindow(window.hWnd, nCmdShow);
+   ShowWindow(window.hWnd, SW_MAXIMIZE);
    UpdateWindow(window.hWnd);
 
    return TRUE;
