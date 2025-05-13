@@ -10,7 +10,10 @@
 #include <iostream>
 #include <cstdlib> 
 #include <ctime>   
-#include <string>  
+#include <string> 
+#include <queue>
+#include <utility> 
+#include <climits>
 HFONT hFont;
 
 struct {
@@ -44,9 +47,6 @@ struct edge
 std::vector<edge> edgelist;
 std::vector<point> pointlist;
 
-float mouseX;
-float mouseY;
-
 void DrawTextGDI(float x, float y, const char* str)
 {
     SetTextColor(window.context, RGB(255, 255, 255));
@@ -54,6 +54,57 @@ void DrawTextGDI(float x, float y, const char* str)
     SetBkMode(window.context, TRANSPARENT);
     TextOutA(window.context, x * window.width, y * window.height, str, strlen(str));
 }
+
+const int INF = INT_MAX;
+void dijkstra(int start, int n, const std::vector<edge>& edges, const std::vector<point> pointlist) {
+    // Массив расстояний
+    std::vector<int> dist(n, INF);
+    dist[start] = 0; // Расстояние до стартовой вершины
+
+    // Минимальная очередь приоритетов
+    using pii = std::pair<int, int>; // Пара (расстояние, вершина)
+    std::priority_queue<pii, std::vector<pii>, std::greater<pii>> pq;
+    pq.push({ 0, start }); // Начинаем с стартовой вершины
+
+    // Список смежности для хранения графа
+    std::vector<std::vector<std::pair<int, int>>> graph(n);
+    for (const auto& edge : edges) {
+        graph[edge.i1].emplace_back(edge.i2, edge.length);
+        graph[edge.i2].emplace_back(edge.i1, edge.length); // Если ориентированный граф, уберите эту строку
+    }
+
+    while (!pq.empty()) {
+        int current = pq.top().second; // Текущая вершина
+        pq.pop();
+
+        // Обрабатываем все смежные рёбра
+        for (const auto& neighbor : graph[current]) {
+            int next = neighbor.first; // Смежная вершина
+            int weight = neighbor.second; // Вес ребра
+
+            if (dist[current] + weight < dist[next]) {
+                dist[next] = dist[current] + weight; // Обновляем расстояние
+                pq.push({ dist[next], next }); // Добавляем смежную вершину
+            }
+        }
+    }
+
+    // Выводим результаты
+    for (int i = 0; i < n; ++i) {
+        if (dist[i] == INF) {
+            DrawTextGDI(pointlist[i].x - 0.02, pointlist[i].y - 0.04, "point unavailable");//недоступна;
+        }
+        else {
+            std::string t = std::to_string(dist[i]);
+            DrawTextGDI(pointlist[i].x - 0.02 , pointlist[i].y - 0.04, t.c_str());
+        }
+    }
+}
+
+float mouseX;
+float mouseY;
+
+
 
 void getMouse()
 {
@@ -95,58 +146,6 @@ void Line(float x, float y, float x1, float y1)
     LineTo(window.context, x1 * window.width, y1 * window.height);
 }
 
-const int INF = 999999999999999; 
-
-// Рекурсивная функция для алгоритма Дейкстры
-void dijkstraUtil(int u, std::vector<int>& dist, const std::vector<edge>& edgelist, std::vector<bool>& visited) {
-    visited[u] = true; // Помечаем узел как посещенный
-
-    // Обходим все рёбра
-    for (const auto& edge : edgelist) {
-        int v = -1;
-        if (edge.i1 == u) {
-            v = edge.i2; // Соединение с ребром
-        }
-        else if (edge.i2 == u) {
-            v = edge.i1; // Соединение с ребром
-        }
-
-        // Если найден более короткий путь
-        if (v != -1 && !visited[v]) {
-            if (dist[u] + edge.length < dist[v]) {
-                dist[v] = dist[u] + edge.length; // Обновляем расстояние
-            }
-        }
-    }
-
-    // Ищем следующий узел с минимальным расстоянием
-    int nextNode = -1;
-    int minDist = INF; // Используем постоянное значение INF
-
-    for (int i = 0; i < dist.size(); ++i) {
-        if (!visited[i] && dist[i] < minDist) {
-            minDist = dist[i];
-            nextNode = i;
-        }
-    }
-
-    // Запускаем рекурсию для следующего узла
-    if (nextNode != -1) {
-        dijkstraUtil(nextNode, dist, edgelist, visited);
-    }
-}
-
-// Основная функция Дейкстры
-void dijkstra(int start, std::vector<point>& pointlist, std::vector<edge>& edgelist) {
-    int n = pointlist.size();
-    std::vector<int> dist(n, INF); // Массив для расстояний
-    std::vector<bool> visited(n, false); // Массив посещенных вершин
-    dist[start] = 0; // Расстояние до стартовой вершины
-
-    // Рекурсивный вызов
-    dijkstraUtil(start, dist, edgelist, visited);
-    
-}
 
 
 #define MAX_LOADSTRING 100
@@ -197,7 +196,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     GetClientRect(window.hWnd, &r);
     //поиграем шрифтами и цветами
     
-    hFont = CreateFont(20, 0, 0, 0, FW_BOLD, 0, 0, 0, 0, 0, 0, 2, 0, "CALIBRI");
+    hFont = CreateFont(20, 0, 0, 0, FW_BOLD, 0, 0, 0, 0, 0, 0, 2, 0, L"CALIBRI");
     auto hTmp = (HFONT)SelectObject(window.context, hFont);
 
     penRed = CreatePen(PS_SOLID, 3, RGB(255, 0, 0));
@@ -290,7 +289,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         SelectObject(window.context, penWhite);
         SelectObject(window.context, brush);
         
-        drawRectangle(0.05, 0.05, 0.10, 0.1);
+        drawRectangle(0.05, 0.05, 0.12, 0.1);
         DrawTextGDI(0.060, 0.06, "set edges");
         drawRectangle(0.150, 0.05, 0.210, 0.1);
         DrawTextGDI(0.160, 0.06, "set points");
@@ -308,6 +307,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             std::string t = std::to_string(edgelist[i].length);
             DrawTextGDI(x+0.01, y + 0.02, t.c_str());
             Line(pointlist[i1].x, pointlist[i1].y, pointlist[i2].x, pointlist[i2].y);
+            
+            dijkstra(0, pointlist.size(), edgelist, pointlist);
         }
 
         for (int i = 0; i < pointlist.size(); i++)
@@ -316,13 +317,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             std::string x = std::to_string(i+1);
             DrawTextGDI(pointlist[i].x-0.002, pointlist[i].y - 0.01, x.c_str());
         }
-        dijkstra(0, pointlist, edgelist);
+        //dijkstra(0, pointlist, edgelist);
         SelectObject(window.context, penRed);
         
-
-                 
-             
-
         BitBlt(window.device_context, 0, 0, window.width, window.height, window.context, 0, 0, SRCCOPY);//копируем буфер в окно
         Sleep(16);//ждем 16 милисекунд (1/количество кадров в секунду)
 
