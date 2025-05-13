@@ -16,10 +16,13 @@
 #include <climits>
 HFONT hFont;
 
+float mouseX;
+float mouseY;
+
 struct {
     HWND hWnd;//хэндл окна
     HDC device_context, context;// два контекста устройства (для буферизации)
-    int width, height;//сюда сохраним размеры окна которое создаст программа
+    float width, height;//сюда сохраним размеры окна которое создаст программа
 } window;
 
 HPEN penRed;
@@ -47,12 +50,61 @@ struct edge
 std::vector<edge> edgelist;
 std::vector<point> pointlist;
 
-void DrawTextGDI(float x, float y, const char* str)
+float sign(float a)
 {
-    SetTextColor(window.context, RGB(255, 255, 255));
+    if (a > 0) return 1;
+    if (a < 0) return -1;
+    return 0;
+}
+
+float buttonDist = 0;
+int index = -1;
+
+bool DrawTextGDIN(float x, float y, const char* str, int i)
+{
+    SIZE textSize;
+    bool over = false;
+    bool print = false;
+    GetTextExtentPoint32A(
+        window.context,
+        str,
+        strlen(str),
+        &textSize
+    );
+
+    if (mouseX > x && mouseY > y &&
+        mouseX < x + textSize.cx / window.width && mouseY < y + (textSize.cy / window.height))
+    {
+        over = true;
+        
+        buttonDist = sign(mouseX - (x + textSize.cx / window.width/ 2.));
+        index = i;
+
+        SetTextColor(window.context, buttonDist > 0 ? RGB(0, 255, 0) : RGB(255, 0, 0));
+    }
+    else
+    {
+        SetTextColor(window.context, RGB(255, 255, 255));
+    }
+
     SetBkColor(window.context, RGB(0, 0, 0));
     SetBkMode(window.context, TRANSPARENT);
     TextOutA(window.context, x * window.width, y * window.height, str, strlen(str));
+    
+    return over;
+}
+
+bool DrawTextGDI(float x, float y, const char* str)
+{
+    bool over = false;
+    SetTextColor(window.context, RGB(255, 255, 255));
+   
+    SetBkColor(window.context, RGB(0, 0, 0));
+    SetBkMode(window.context, TRANSPARENT);
+    
+    TextOutA(window.context, x * window.width, y * window.height, str, strlen(str));
+    
+    return over;
 }
 
 const int INF = INT_MAX;
@@ -101,8 +153,7 @@ void dijkstra(int start, int n, const std::vector<edge>& edges, const std::vecto
     }
 }
 
-float mouseX;
-float mouseY;
+
 
 
 
@@ -209,6 +260,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     int ind1 = -1;
     int ind2 = -1;
 
+    bool mouseOverEdgeButtons = false;
+
     // Main message loop:
     while (GetMessage(&msg, nullptr, 0, 0))
     {
@@ -222,19 +275,37 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
         drawBack();
 
-        if (GetAsyncKeyState(VK_LBUTTON))
+       
         {
-            if(tap == false)
+
+            if (GetAsyncKeyState(VK_LBUTTON))
             {
-                point p = { mouseX, mouseY };
-                pointlist.push_back(p);
-                tap = true;
+                if (tap == false)
+                {
+
+                    if (!mouseOverEdgeButtons)
+                    {
+                        point p = { mouseX, mouseY };
+                        pointlist.push_back(p);
+
+                    }
+                    else {
+
+                        if (index >= 0)
+                        {
+                            edgelist[index].length += buttonDist;
+                        }
+                    }
+
+                    tap = true;
+                }
+            }
+            else
+            {
+                tap = false;
             }
         }
-        else
-        {
-            tap = false;
-        }
+        
         
         if (GetAsyncKeyState(VK_RBUTTON))
         {
@@ -294,6 +365,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         drawRectangle(0.150, 0.05, 0.210, 0.1);
         DrawTextGDI(0.160, 0.06, "set points");
         
+        index = -1;
+
         for (int i = 0; i < edgelist.size(); i++)
         {
             int i1 = edgelist[i].i1;
@@ -304,10 +377,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             }
             float x = (pointlist[i2].x + pointlist[i1].x) / 2;
             float y = (pointlist[i2].y + pointlist[i1].y) / 2;
-            std::string t = std::to_string(edgelist[i].length);
-            DrawTextGDI(x+0.01, y + 0.02, t.c_str());
+            
+            std::string t = "-  {" + std::to_string(edgelist[i].length) + "}  +";
+
+            bool over = DrawTextGDIN(x+0.01, y + 0.02, t.c_str(), i);
+                        
+            mouseOverEdgeButtons = over;
+
             Line(pointlist[i1].x, pointlist[i1].y, pointlist[i2].x, pointlist[i2].y);
             
+            
+        }
+
+        if (!edgelist.empty())
+        {
             dijkstra(0, pointlist.size(), edgelist, pointlist);
         }
 
